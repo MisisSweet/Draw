@@ -1,0 +1,147 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title></title>
+
+    <style>
+        body {
+            position: relative;
+            min-width: 100%;
+            min-height: 100%;
+        }
+
+        canvas {
+            position: relative;
+            background-color: #FFFFFF;
+            border: 2px solid black;
+        }
+
+        img {
+            object-fit: cover;
+            display: block;
+            max-width: 100%;
+        }
+
+        button {
+            width: 50px;
+            height: 50px;
+        }
+
+        .btn-list {
+            margin: 0;
+            top: 50%;
+            transform: translate(0, -50%);
+        }
+
+        .btn-active {
+            background-color: yellow;
+        }
+
+        .btn-no-active {
+            background-color: gainsboro;
+        }
+    </style>
+
+    <link type="text/javascript" src="~/lib/bootstrap/dist/js/bootstrap.min.js" />
+
+    <script src="~/js/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/js/paper-full.min.js"></script>
+
+    
+
+</head>
+<body>
+    <div class="btn-list position-absolute dropdown-menu-left">
+        <div class="d-flex flex-column">
+            <button id="pen" onclick="onBtnClick(0)"><img src="./icon/карандаш.png" /></button>
+            <button id="las" onclick="onBtnClick(1)"><img src="./icon/стёрка.png" /></button>
+            <button id="text" onclick="onBtnClick(2)"><img src="./icon/текст.png" /></button>
+            <button id="note" onclick="onBtnClick(3)"><img src="./icon/заметки.png" /></button>
+        </div>
+    </div>
+    <canvas id='drawingpad' width='1000' height='600'></canvas>
+    <script>
+        btns = [document.getElementById("pen"), document.getElementById("las"), document.getElementById("text"), document.getElementById("note")];
+        selectOperation = 0;
+
+        var data = {
+            id: "",
+            isDrawing: false,
+            operation: 0,
+            x: 0,
+            y: 0,
+        }
+
+        function onBtnClick(operation) {
+            console.log(operation);
+            data.isDrawing = operation == 0;
+            selectOperation = operation;
+            changeActiveBtn(operation);
+        };
+        function changeActiveBtn(id) {
+            console.log(`change opert ${id}`);
+            for (i = 0; i < 4; i++) {
+                btns[i].className = i == id ? 'btn-active' : 'btn-no-active';
+            }
+        }
+        $(function () {
+            const hubConnection = new signalR.HubConnectionBuilder()
+                .withUrl("/draw")
+                .build();
+
+            hubConnection.start().then(() => {
+                data.id = hubConnection["connection"]["connectionId"];
+            });
+
+            paper.install(window);
+            var canvas = document.getElementById('drawingpad');
+            paper.setup(canvas);
+            var path = new paper.Path();
+            var p = new paper.Path();
+
+            hubConnection.on("Receive", function (data, id) {
+                switch (data.operation) {
+                    case 0: {
+                        p = new paper.Path();
+                        p.strokeColor = 'black';
+                        p.strokeWidth = 3;
+                        break;
+                    }
+                    case 1: {
+                        p.add(new Point(data.x, data.y));
+                        break;
+                    }
+                }
+                console.log(data);
+            });
+
+            onMouseDown = function (event) {
+                path = new paper.Path();
+                data.operation = 0;
+                path.strokeColor = 'black';
+                path.strokeWidth = 3;
+                hubConnection.invoke('Send', data);
+            }
+
+            onMouseDrag = function (event) {
+                if (selectOperation == 0) {
+                    data.operation = 1;
+                    data.x = event.point.x;
+                    data.y = event.point.y;
+                    path.add(event.point);
+                    hubConnection.invoke('Send', data);
+                }
+            }
+            changeActiveBtn(selectOperation);
+
+            paper.project._view.on("mousedown", onMouseDown);
+            paper.project._view.on("mousedrag", onMouseDrag);
+        });
+    </script>
+</body>
+</html>
